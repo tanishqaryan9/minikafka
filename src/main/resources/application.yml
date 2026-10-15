@@ -1,0 +1,18 @@
+spring:
+  application:
+    name: minikafka
+
+server:
+  port: 8080            # REST API
+
+minikafka:
+  port: 9092            # raw TCP broker port (0 = random free port)
+  data-dir: data
+  partitions: 4
+  worker-threads: 16
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
