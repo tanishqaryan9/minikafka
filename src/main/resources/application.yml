@@ -1,0 +1,48 @@
+spring:
+  application:
+    name: minikafka
+
+server:
+  port: 8080            # REST API
+
+logging:
+  file:
+    name: logs/minikafka.log     # the application log; the audit trail is a separate file (see minikafka.audit)
+
+minikafka:
+  port: 9092            # raw TCP broker port (0 = random free port)
+  data-dir: data
+  partitions: 4
+  worker-threads: 16
+  node-id: node-1       # shows on every audit line; identifies this node inside a cluster
+
+  audit:                # who added what, who consumed what -> its own file
+    enabled: true
+    file: logs/audit.log
+    max-file-size-mb: 10          # roll over to audit.log.1, .2, ... at this size
+    max-backups: 3
+    payload-preview: 40           # characters of each record shown in the log; 0 = never log content
+    consume-per-record: true      # true: one CONSUME line per record, false: one line per batch
+    memory-events: 2000           # recent events served by GET /api/audit
+
+  group-commit:         # many producers share one fsync
+    enabled: true
+    max-batch: 128
+    queue-capacity: 1024
+
+  group:
+    session-timeout-ms: 30000     # a consumer silent for this long is dropped from its group
+
+  cluster:              # replication + leader election; off = a normal single broker
+    enabled: false
+    peers: []                     # the OTHER nodes, e.g. ["node-2=localhost:9093", "node-3=localhost:9094"]
+    advertise: ""                 # how others reach this node; empty = localhost:<tcp port>
+    heartbeat-ms: 500
+    election-timeout-ms: 3000
+    ack-timeout-ms: 3000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

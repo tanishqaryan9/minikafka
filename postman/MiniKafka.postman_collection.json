@@ -1,0 +1,1199 @@
+{
+  "info": {
+    "name": "MiniKafka",
+    "description": "REST API of MiniKafka. Start the app (mvn spring-boot:run), then run the folders in order. X-Client-Id is what shows up as 'actor' in logs/audit.log.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "topic",
+      "value": "orders"
+    },
+    {
+      "key": "group",
+      "value": "billing"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Produce (added by whom)",
+      "item": [
+        {
+          "name": "Produce as order-service (key alice)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Client-Id",
+                "value": "order-service"
+              },
+              {
+                "key": "Content-Type",
+                "value": "text/plain"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/topics/{{topic}}/messages?key=alice",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "topics",
+                "{{topic}}",
+                "messages"
+              ],
+              "query": [
+                {
+                  "key": "key",
+                  "value": "alice"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "deposit"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "const b = pm.response.json();",
+                  "pm.test(\"has partition and offset\", () => { pm.expect(b.partition).to.be.within(0, 3); pm.expect(b.offset).to.be.at.least(0); });",
+                  "pm.collectionVariables.set(\"lastPartition\", b.partition);",
+                  "pm.collectionVariables.set(\"lastOffset\", b.offset);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Produce as order-service (same key -> same partition)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Client-Id",
+                "value": "order-service"
+              },
+              {
+                "key": "Content-Type",
+                "value": "text/plain"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/topics/{{topic}}/messages?key=alice",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "topics",
+                "{{topic}}",
+                "messages"
+              ],
+              "query": [
+                {
+                  "key": "key",
+                  "value": "alice"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "withdraw"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"same partition as before\", () => pm.expect(pm.response.json().partition).to.eql(Number(pm.collectionVariables.get(\"lastPartition\"))));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Produce as payment-service (key bob)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Client-Id",
+                "value": "payment-service"
+              },
+              {
+                "key": "Content-Type",
+                "value": "text/plain"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/topics/{{topic}}/messages?key=bob",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "topics",
+                "{{topic}}",
+                "messages"
+              ],
+              "query": [
+                {
+                  "key": "key",
+                  "value": "bob"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "payment received"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Produce without a client id (shows as anonymous)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "text/plain"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/topics/{{topic}}/messages?key=carol",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "topics",
+                "{{topic}}",
+                "messages"
+              ],
+              "query": [
+                {
+                  "key": "key",
+                  "value": "carol"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "hello"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Read without a group",
+      "item": [
+        {
+          "name": "Fetch one record",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Client-Id",
+                "value": "audit-dashboard"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/topics/{{topic}}/partitions/{{lastPartition}}/messages/{{lastOffset}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "topics",
+                "{{topic}}",
+                "partitions",
+                "{{lastPartition}}",
+                "messages",
+                "{{lastOffset}}"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"is the first message\", () => pm.expect(pm.response.text()).to.eql(\"deposit\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Fetch a batch (you track the offset)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Client-Id",
+                "value": "audit-dashboard"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/topics/{{topic}}/partitions/{{lastPartition}}/messages?from=0&max=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "topics",
+                "{{topic}}",
+                "partitions",
+                "{{lastPartition}}",
+                "messages"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "0"
+                },
+                {
+                  "key": "max",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Offset not written yet -> 404",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/topics/{{topic}}/partitions/{{lastPartition}}/messages/999999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "topics",
+                "{{topic}}",
+                "partitions",
+                "{{lastPartition}}",
+                "messages",
+                "999999"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Partition out of range -> 400",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/topics/{{topic}}/partitions/9/messages/0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "topics",
+                "{{topic}}",
+                "partitions",
+                "9",
+                "messages",
+                "0"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List topics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/topics",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "topics"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Topic detail (end offset per partition)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/topics/{{topic}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "topics",
+                "{{topic}}"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Consumer group (consumed by whom)",
+      "item": [
+        {
+          "name": "c1 joins",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Client-Id",
+                "value": "billing-c1"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{group}}/topics/{{topic}}/join?consumer=c1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{group}}",
+                "topics",
+                "{{topic}}",
+                "join"
+              ],
+              "query": [
+                {
+                  "key": "consumer",
+                  "value": "c1"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "c2 joins (partitions are split)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Client-Id",
+                "value": "billing-c2"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{group}}/topics/{{topic}}/join?consumer=c2",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{group}}",
+                "topics",
+                "{{topic}}",
+                "join"
+              ],
+              "query": [
+                {
+                  "key": "consumer",
+                  "value": "c2"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "c1 re-joins to read its assignment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Client-Id",
+                "value": "billing-c1"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{group}}/topics/{{topic}}/join?consumer=c1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{group}}",
+                "topics",
+                "{{topic}}",
+                "join"
+              ],
+              "query": [
+                {
+                  "key": "consumer",
+                  "value": "c1"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"c1 owns 2 of 4 partitions\", () => pm.expect(pm.response.json().partitions.length).to.eql(2));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "c1 polls (only its partitions)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Client-Id",
+                "value": "billing-c1"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{group}}/topics/{{topic}}/poll?consumer=c1&max=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{group}}",
+                "topics",
+                "{{topic}}",
+                "poll"
+              ],
+              "query": [
+                {
+                  "key": "consumer",
+                  "value": "c1"
+                },
+                {
+                  "key": "max",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "c2 polls",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Client-Id",
+                "value": "billing-c2"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{group}}/topics/{{topic}}/poll?consumer=c2&max=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{group}}",
+                "topics",
+                "{{topic}}",
+                "poll"
+              ],
+              "query": [
+                {
+                  "key": "consumer",
+                  "value": "c2"
+                },
+                {
+                  "key": "max",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "c1 commits its positions",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Client-Id",
+                "value": "billing-c1"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{group}}/topics/{{topic}}/commit?consumer=c1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{group}}",
+                "topics",
+                "{{topic}}",
+                "commit"
+              ],
+              "query": [
+                {
+                  "key": "consumer",
+                  "value": "c1"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "c2 commits its positions",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Client-Id",
+                "value": "billing-c2"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{group}}/topics/{{topic}}/commit?consumer=c2",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{group}}",
+                "topics",
+                "{{topic}}",
+                "commit"
+              ],
+              "query": [
+                {
+                  "key": "consumer",
+                  "value": "c2"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Describe the group (members, owners, committed, lag)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{group}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{group}}"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Heartbeat",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{group}}/topics/{{topic}}/heartbeat?consumer=c1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{group}}",
+                "topics",
+                "{{topic}}",
+                "heartbeat"
+              ],
+              "query": [
+                {
+                  "key": "consumer",
+                  "value": "c1"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Poll as a stranger -> 409",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{group}}/topics/{{topic}}/poll?consumer=nobody&max=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{group}}",
+                "topics",
+                "{{topic}}",
+                "poll"
+              ],
+              "query": [
+                {
+                  "key": "consumer",
+                  "value": "nobody"
+                },
+                {
+                  "key": "max",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 409\", () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "c1 leaves",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Client-Id",
+                "value": "billing-c1"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{group}}/topics/{{topic}}/leave?consumer=c1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{group}}",
+                "topics",
+                "{{topic}}",
+                "leave"
+              ],
+              "query": [
+                {
+                  "key": "consumer",
+                  "value": "c1"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "c2 leaves",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Client-Id",
+                "value": "billing-c2"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/groups/{{group}}/topics/{{topic}}/leave?consumer=c2",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "groups",
+                "{{group}}",
+                "topics",
+                "{{topic}}",
+                "leave"
+              ],
+              "query": [
+                {
+                  "key": "consumer",
+                  "value": "c2"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Audit trail",
+      "item": [
+        {
+          "name": "Everything recent",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/audit?limit=50",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "audit"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "What did order-service add?",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/audit?type=PRODUCE&actor=order-service",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "audit"
+              ],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "PRODUCE"
+                },
+                {
+                  "key": "actor",
+                  "value": "order-service"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"only order-service\", () => pm.response.json().forEach(e => pm.expect(e.actor).to.include(\"order-service\")));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "What did group billing consume?",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/audit?type=CONSUME&group={{group}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "audit"
+              ],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "CONSUME"
+                },
+                {
+                  "key": "group",
+                  "value": "{{group}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Commits",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/audit?type=COMMIT",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "audit"
+              ],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "COMMIT"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Where is the audit file?",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/audit/info",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "audit",
+                "info"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5. Cluster and health",
+      "item": [
+        {
+          "name": "Cluster status (STANDALONE unless cluster mode is on)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/cluster",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cluster"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/actuator/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"UP\", () => pm.expect(pm.response.json().status).to.eql(\"UP\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
